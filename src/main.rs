@@ -23,20 +23,114 @@ use serenity::{
 
 mod cogs;
 
+use sqlite::{State, Value};
+
 use std::arch::x86_64::_mm_sha1msg1_epu32;
 use serenity::prelude::*;
 use tokio::sync::{Mutex, RwLockWriteGuard};
+
+
+// A container type is created for inserting into the Client's `data`, which
+// allows for data to be accessible across all events and framework commands, or
+// anywhere else that has a copy of the `data` Arc.
+struct ShardManagerContainer;
+
+impl TypeMapKey for ShardManagerContainer {
+    type Value = Arc<Mutex<ShardManager>>;
+}
 
 use cogs::{
     ping::*,
     ban::*,
 };
 
+struct CommandCounter;
+
+impl TypeMapKey for CommandCounter
+{
+    type Value = HashMap<String, u64>;
+}
+
 struct Commands;
 
+
+#[async_trait]
+impl EventHandler for Handler
+{
+    async fn ready(&self, _: Context, read: Ready)
+    {
+        println!("{} is connected!", ready.user.name);
+    }
+}
+
 #[group]
-#[commands(ping, ban)]
+#[commands(ping, say)]
 struct General;
+
+#[group]
+#[prefix = "math"]
+#[commands(multiply)]
+struct Math;
+
+#[group]
+#[owner_only]
+#[only_in(guilds)]
+#[summary = "Commands for server onwers"]
+#[commands(slow_mode, mass_ban)]
+struct Owner;
+
+#[group]
+#[admin_only]
+#[only_in(guilds)]
+#[summary = "Commands for server admins"]
+#[commands(ban, tempBan, kick, add_rank, remove_rank)]
+struct Admin;
+
+// The framework provides two built-in help commands for you to use.
+// But you can also make your own customized help command that forwards
+// to the behaviour of either of them.
+#[help]
+// This replaces the information that a user can pass
+// a command-name as argument to gain specific information about it.
+#[individual_command_tip =
+"Hello! こんにちは！Hola! Bonjour! 您好! 안녕하세요~\n\n\
+If you want more information about a specific command, just pass the command as argument."]
+// Some arguments require a `{}` in order to replace it with contextual information.
+// In this case our `{}` refers to a command's name.
+#[command_not_found_text = "Could not find: `{}`."]
+// Define the maximum Levenshtein-distance between a searched command-name
+// and commands. If the distance is lower than or equal the set distance,
+// it will be displayed as a suggestion.
+// Setting the distance to 0 will disable suggestions.
+#[max_levenshtein_distance(3)]
+// When you use sub-groups, Serenity will use the `indention_prefix` to indicate
+// how deeply an item is indented.
+// The default value is "-", it will be changed to "+".
+#[indention_prefix = "+"]
+// On another note, you can set up the help-menu-filter-behaviour.
+// Here are all possible settings shown on all possible options.
+// First case is if a user lacks permissions for a command, we can hide the command.
+#[lacking_permissions = "Hide"]
+// If the user is nothing but lacking a certain role, we just display it hence our variant is `Nothing`.
+#[lacking_role = "Nothing"]
+// The last `enum`-variant is `Strike`, which ~~strikes~~ a command.
+#[wrong_channel = "Strike"]
+// Serenity will automatically analyse and generate a hint/tip explaining the possible
+// cases of ~~strikethrough-commands~~, but only if
+// `strikethrough_commands_tip_in_{dm, guild}` aren't specified.
+// If you pass in a value, it will be displayed instead.
+
+async fn my_help(
+    context: &Context,
+    msg: &Message,
+    args: Args,
+    help_options: &'static HelpOptions,
+    groups: &[&'static CommandGroup],
+    owners: HashSet<UserId>
+) -> CommandResult {
+    let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+    Ok(())
+}
 
 #[hook]
 async fn before(ctx: &Context, msg: &Message, command_name: &str) -> bool {
@@ -66,65 +160,108 @@ async fn unknown_command(_ctx: &Context, _msg: &Message, unknown_command_name: &
     println!("Could not find command named '{}'", unknown_command_name);
 }
 
-fn main()
+#[hook]
+async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError) {
+    if let DispatchError::Ratelimited(info) = error {
+
+        // We notify them only once.
+        if info.is_first_try {
+            let _ = msg
+                .channel_id
+                .say(&ctx.http, &format!("Try this again in {} seconds.", info.as_secs()))
+                .await;
+        }
+    }
+}
+
+// You can construct a hook without the use of a macro, too.
+// This requires some boilerplate though and the following additional import.
+use serenity::{futures::future::BoxFuture, FutureExt};
+fn _dispatch_error_no_macro<'fut>(ctx: &'fut mut Context, msg: &'fut Message, error: DispatchError) -> BoxFuture<'fut, ()> {
+    async move {
+        if let DispatchError::Ratelimited(info) = error {
+
+            if info.is_first_try {
+                let _ = msg
+                    .channel_id
+                    .say(&ctx.http, &format!("Try this again in {} seconds.", info.as_secs()))
+                    .await;
+            }
+        };
+    }.boxed()
+}
+
+#[tokio::main]
+async fn main()
 {
     println!("Booting");
 
     let token= env::var("Testing")
         .expect("Expected a token in the environment");
 
+    let http = Http::new_with_token(&token);
+
+    // We will fetch your bot's owners and id
+    let (owners, bot_id) = match http.get_current_application_info().await {
+        Ok(info) => {
+            let mut owners = HashSet::new();
+            if let Some(team) = info.team {
+                owners.insert(team.owner_user_id);
+            } else {
+                owners.insert(info.owner.id);
+            }
+            match http.get_current_user().await {
+                Ok(bot_id) => (owners, bot_id.id),
+                Err(why) => panic!("Could not access the bot id: {:?}", why),
+            }
+        },
+        Err(why) => panic!("Could not access application info: {:?}", why),
+    };
+
     let framework :StandardFramework = StandardFramework::new()
         .configure(|c  | c
             .with_whitespace(true)
             .on_mention(Some(bot_id))
             .prefix("~")
-            .delimiters(vec![", ", ","]))
-        .help( &MY_HELP)
-        .group(&GENERAL_GROUP);
+            .delimiters(vec![", ", ","])
+            .admins(admins)
+            .owners(owners))
+
+
+    // Set a function to be called prior to each command execution. This
+    // provides the context of the command, the message that was received,
+    // and the full name of the command that will be called.
+    //
+    // You can not use this to determine whether a command should be
+    // executed. Instead, the `#[check]` macro gives you this functionality.
+    //
+    // **Note**: Async closures are unstable, you may use them in your
+    // application if you are fine using nightly Rust.
+    // If not, we need to provide the function identifiers to the
+    // hook-functions (before, after, normal, ...).
+    .before(before)
+    // Similar to `before`, except will be called directly _after_
+    // command execution.
+    .after(after)
+    // Set a function that's called whenever an attempted command-call's
+    // command could not be found.
+    .unrecognised_command(unknown_command)
+    .help( &MY_HELP)
+    .group(&GENERAL_GROUP);
 
     let mut client :Client = Client::builder(&token)
         .event_handler(Commands)
         .framework(framework)
         .await
         .expect("Error building client");
-}
 
-/*#[async_Trait]
-impl EventHandler for Commands
-{
-    async fn message(&self, ctx: Context, msg: Message)
     {
-        if msg.content == "!testing"
-        {
-            let channel :Channel = match msg.channel_id.to_channel(&Context).await
-            {
-                Ok(channel ) => channel,
-                Err(why) =>
-                    {
-                        println!("Error sending output: {:?}", why);
-                        return;
-                    }
-            };
-
-
-            let response :string = MessageBuilder::new()
-                .push("User ") :&mut MessageBuilder
-                .push_bold_safe(&msg.author.name) :&mut MessageBuilder
-                .push(" has tested this command in the channel") :&mut MessageBuilder
-                .mention(&channel) :&mut MessageBuilder
-                .push(" ") :&mut MessageBuilder
-                .build();
-
-            if let Err(why) = msg.channel_id.say(&Context.http, &response).await
-            {
-                print!("Error sending message: {:?}", why);
-            }
-        }
-
-        async fn ready(&self, _: Context, read: Ready)
-        {
-            print!("{} is connected!", ready.user.name);
-        }
-
+        let mut data = client.data.write().await;
+        data.insert::<CommandCounter>(HashMap::default());
+        data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
     }
-}*/
+
+    if let Err(why) = client.start().await {
+        println!("Client error: {:?}", why);
+    }
+}

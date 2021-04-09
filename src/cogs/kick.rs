@@ -13,9 +13,9 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 	if let Some(member) = &msg.member {
 
 		for role in &member.roles {
-			if role.to_role_cached(&ctx.cache).await.map_or(false, |r| r.has_permission(Permissions::BAN_MEMBERS)) {
+			if role.to_role_cached(&ctx.cache).await.map_or(false, |r| r.has_permission(Permissions::KICK_MEMBERS)) {
 
-				guild.ban_with_reason(user, 4, reason);
+				guild.kick_with_reason(user, 4, reason);
 
 				return Ok(());
 			}
