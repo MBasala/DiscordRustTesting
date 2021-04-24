@@ -8,7 +8,9 @@ use serenity::framework::standard::{
 #[command]
 #[only_in(guilds)]
 #[required_permissions("ADMINISTRATOR")]
-pub async fn addModRole(ctx: &Context, msg: &Message) -> CommandResult {
+//ToDo: Add in a system which it allows admins to add role that enables user to use the bot without api permisions
+pub async fn add_mod_role(ctx: &Context, msg: &Message) -> CommandResult
+{
 
 	if msg == " "
 	{

@@ -22,8 +22,7 @@ use serenity::{
 };
 
 mod cogs;
-
-use sqlite::{State, Value};
+mod sqlHandling;
 
 use std::arch::x86_64::_mm_sha1msg1_epu32;
 use serenity::prelude::*;
@@ -39,10 +38,10 @@ impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
 }
 
-use cogs::{
+/*use cogs::{
     ping::*,
     ban::*,
-};
+};*/
 
 struct CommandCounter;
 
@@ -55,7 +54,7 @@ struct Commands;
 
 
 #[async_trait]
-impl EventHandler for Handler
+impl EventHandler for Commands
 {
     async fn ready(&self, _: Context, read: Ready)
     {
@@ -65,6 +64,7 @@ impl EventHandler for Handler
 
 #[group]
 #[commands(ping, say)]
+#[only_in(guilds)]
 struct General;
 
 #[group]
@@ -73,16 +73,16 @@ struct General;
 struct Math;
 
 #[group]
-#[owner_only]
+#[owners_only]
 #[only_in(guilds)]
 #[summary = "Commands for server onwers"]
 #[commands(slow_mode, mass_ban)]
 struct Owner;
 
 #[group]
-#[admin_only]
 #[only_in(guilds)]
-#[summary = "Commands for server admins"]
+#[summary = "Commands for banning"]
+#[required_permissions("BAN_MEMBER")]
 #[commands(ban, tempBan, kick, add_rank, remove_rank)]
 struct Admin;
 
@@ -161,6 +161,17 @@ async fn unknown_command(_ctx: &Context, _msg: &Message, unknown_command_name: &
 }
 
 #[hook]
+async fn normal_message(_ctx: &Context, msg: &Message) {
+    println!("Message is not a command '{}'", msg.content);
+}
+
+#[hook]
+async fn delay_action(ctx: &Context, msg: &Message) {
+    // You may want to handle a Discord rate limit if this fails.
+    let _ = msg.react(ctx, '⏱').await;
+}
+
+#[hook]
 async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError) {
     if let DispatchError::Ratelimited(info) = error {
 
@@ -224,7 +235,6 @@ async fn main()
             .on_mention(Some(bot_id))
             .prefix("~")
             .delimiters(vec![", ", ","])
-            .admins(admins)
             .owners(owners))
 
 
@@ -232,8 +242,9 @@ async fn main()
     // provides the context of the command, the message that was received,
     // and the full name of the command that will be called.
     //
-    // You can not use this to determine whether a command should be
-    // executed. Instead, the `#[check]` macro gives you this functionality.
+    // Avoid using this to determine whether a specific command should be
+    // executed. Instead, prefer using the `#[check]` macro which
+    // gives you this functionality.
     //
     // **Note**: Async closures are unstable, you may use them in your
     // application if you are fine using nightly Rust.
@@ -245,9 +256,27 @@ async fn main()
     .after(after)
     // Set a function that's called whenever an attempted command-call's
     // command could not be found.
+
+        // Can't be used more than 2 times per 30 seconds, with a 5 second delay applying per channel.
+        // Optionally `await_ratelimits` will delay until the command can be executed instead of
+        // cancelling the command invocation.
+        .bucket("complicated", |b| b.limit(2).time_span(30).delay(5)
+            // The target each bucket will apply to.
+            .limit_for(LimitedFor::Channel)
+            // The maximum amount of command invocations that can be delayed per target.
+            // Setting this to 0 (default) will never await/delay commands and cancel the invocation.
+            .await_ratelimits(1)
+            // A function to call when a rate limit leads to a delay.
+            .delay_action(delay_action)).await
+        // The `#[group]` macro generates `static` instances of the options set for the group.
+        // They're made in the pattern: `#name_GROUP` for the group instance and `#name_GROUP_OPTIONS`.
+        // #name is turned all uppercase
     .unrecognised_command(unknown_command)
     .help( &MY_HELP)
-    .group(&GENERAL_GROUP);
+    .group(&GENERAL_GROUP)
+    .group(&MATH_GROUP)
+        .group(&ADMIN_GROUP)
+    .group(&OWNER_GROUP);
 
     let mut client :Client = Client::builder(&token)
         .event_handler(Commands)
