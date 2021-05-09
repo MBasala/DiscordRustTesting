@@ -22,7 +22,7 @@ use serenity::{
 };
 
 mod cogs;
-mod sqlHandling;
+mod sql;
 
 use std::arch::x86_64::_mm_sha1msg1_epu32;
 use serenity::prelude::*;
@@ -83,7 +83,7 @@ struct Owner;
 #[only_in(guilds)]
 #[summary = "Commands for banning"]
 #[required_permissions("BAN_MEMBER")]
-#[commands(ban, tempBan, kick, add_rank, remove_rank)]
+#[commands(ban, tempBan, kick)]
 struct Admin;
 
 // The framework provides two built-in help commands for you to use.

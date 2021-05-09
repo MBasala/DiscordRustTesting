@@ -5,11 +5,13 @@ use serenity::framework::standard::{
 	macros::command,
 };
 
-//TODO
+
+
+//TODO: hook up sql cross community group hook up.
 #[command]
 #[num_args(3)]
 #[only_in("guilds")]
-#[required_permissions("BAN_MEMBER")]
+#[required_permissions("BAN_MEMBERS")]
 pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 {
 
@@ -17,8 +19,8 @@ pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 		Err(_) =>
 			{
 				msg.channel_id
-					.say(&ctx, "Not a vaild Member ID for ccban.")
-					.await.unwrap();
+					.say(&ctx, "Not a valid Member ID for a cross community ban.")
+					.await?;
 			}
 
 		Ok(mem) => match (&args).single::<Strings>()
@@ -26,30 +28,33 @@ pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 			Err(_) =>
 				{
 					msg.channel_id
-						.say(&ctx, "You need a vaild reason for ccbanning.")
-						.await.unwrap();
+						.say(&ctx, "You need a valid reason for a cross community banning.")
+						.await?;
 				}
 			Ok(res) => match msg.guild_id
 			{
 				None =>
 					{
 						msg.channel_id
-							.say(&ctx, "You need a vaild server to ccban a user.")
-							.await.unwrap();
+							.say(&ctx, "You need a valid server to a cross community ban a user.")
+							.await?;
 					}
 				Some(g) =>
 					{
-						if (false)
+						//ToDo: implement ccBans with sqlite calls.
+						if false
 						{
 							let member = g.member(&ctx, mem)
 								.ban_with_reason(&ctx, 0, &res)
-								.await.unwrap();
+								.await?;
 							member.ban_with_reason(&ctx, 0, &res)
-							.	await.unwrap();
+								.await?;
 						}
-						msg.channel_id
-							.say(&ctx, format!("Did not ccBanned {}, command is a WIP", member.user.name))
-							.await.unwrap();
+						else {
+							msg.channel_id
+								.say(&ctx, format!("Did not ccBanned {}, command is a WIP", member.user.name))
+								.await?;
+						}
 					}
 			}
 		}

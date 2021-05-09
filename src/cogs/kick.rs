@@ -17,8 +17,8 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 		Err(_) =>
 			{
 				msg.channel_id
-					.say(&ctx, "Not a vaild Member ID.")
-					.await.unwrap();
+					.say(&ctx, "Not a valid Member ID.")
+					.await?;
 			}
 
 		Ok(mem) => match (&args).single::<Strings>()
@@ -26,27 +26,27 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 				Err(_) =>
 					{
 						msg.channel_id
-							.say(&ctx, "You need a vaild reason for banning.")
-							.await.unwrap();
+							.say(&ctx, "You need a valid reason for kicking.")
+							.await?;
 					}
 				Ok(res) => match msg.guild_id
 					{
 						None =>
 							{
 								msg.channel_id
-									.say(&ctx, "You need a vaild server to ban a user.")
-									.await.unwrap();
+									.say(&ctx, "You need a valid server to kick a user.")
+									.await?;
 							}
 						Some(g) =>
 							{
 								let member = g.member(&ctx, mem)
 									.kick_with_reason(&ctx, 0, &res)
-									.await.unwrap();
+									.await?;
 								//member.ban_with_reason(&ctx, 0, &res)
 								//	.await.unwrap();
 								msg.channel_id
-									.say(&ctx, format!("Succesfully Kicked user {}, for {}", member.user.name, &res))
-									.await.unwrap();
+									.say(&ctx, format!("Successfully Kicked user {}, for {}", member.user.name, &res))
+									.await?;
 							}
 					}
 			}

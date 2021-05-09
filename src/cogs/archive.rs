@@ -1,12 +1,21 @@
-use reqwest::json;
+use reqwest::{json, header, Url};
 use std::collections::HashMap;
 use url::{Url, ParseError};
-use serenity::framework::standard::CommandResult;
+use serenity::prelude::*;
+use serenity::model::prelude::*;
+use serenity::framework::standard::{
+	Args, CommandResult,
+	macros::command,
+};
 
-
-struct webArchive_post
+//ToDo: create struct that reflects an web archive http request.
+struct WebarchivePost
 {
-	url: String
+	url :Url,
+	params :T,
+	header :header::USER_AGENT,
+	backoff_facto: u8,
+	no_raise_on_redirects: bool,
 }
 
 #[command]
@@ -15,7 +24,7 @@ struct webArchive_post
 #[required_permissions("BAN_MEMBERS")]
 pub async fn archive(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 {
-	let archive_url = &args.single::<url>();
+	let archive_url = &args.single::<Url>();
 
 	let webArchive_post = newPost
 	{

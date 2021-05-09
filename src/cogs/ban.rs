@@ -8,7 +8,7 @@ use serenity::framework::standard::{
 #[command]
 #[num_args(3)]
 #[only_in("guilds")]
-#[required_permissions("BAN_MEMBER")]
+#[required_permissions("BAN_MEMBERS")]
 pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 {
 
@@ -17,7 +17,7 @@ pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 			{
 				msg.channel_id
 					.say(&ctx, "Not a vaild Member ID.")
-					.await.unwrap();
+					.await?;
 			}
 
 		Ok(mem) => match (&args).single::<Strings>()
@@ -26,7 +26,7 @@ pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 				{
 					msg.channel_id
 						.say(&ctx, "You need a vaild reason for banning.")
-						.await.unwrap();
+						.await?;
 				}
 			Ok(res) => match msg.guild_id
 			{
@@ -34,18 +34,18 @@ pub async fn ccBan(ctx: &Context, msg: &Message, args: Args) -> CommandResult
 					{
 						msg.channel_id
 							.say(&ctx, "You need a vaild server to ban a user.")
-							.await.unwrap();
+							.await?;
 					}
 				Some(g) =>
 					{
 						let member = g.member(&ctx, mem)
 							.ban_with_reason(&ctx, 0, &res)
-							.await.unwrap();
+							.await?;
 						//member.ban_with_reason(&ctx, 0, &res)
 						//	.await.unwrap();
 						msg.channel_id
 							.say(&ctx, format!("Succesfully Banned {}, for: {}", member.user.name, &res))
-							.await.unwrap();
+							.await?;
 					}
 			}
 		}
