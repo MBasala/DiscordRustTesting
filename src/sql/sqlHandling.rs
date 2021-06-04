@@ -16,6 +16,24 @@ use std::alloc::Global;
 //The id of different sql struct may also be created and handled by sqlite server side.
 //Right now sqlite server time stamp is used.
 
+//ToDo: add decoding and encoding functions
+enum incdentTypes {
+    other,
+	doxx,
+	toxic,
+	threat,
+	Unknown,
+	Err();
+}
+
+//ToDo: add decoding and encoding functions
+enum govermentTypes {
+	dictator,
+	simpleMajority,
+	majorMajority,
+	oligarchy,
+}
+
 trait sqlObject {
 	fn delete(&self) -> Result<()>;
 	fn update(&self) -> Result<()>;
@@ -81,6 +99,7 @@ impl sqlObject for CrossCommunity {
 		tx.commit()
 	}
 
+	//ToDo: Can't pass connection when building the new cross product.
 	fn pull(&mut self) -> Result<()> {
 		let mut stmt: Statement =
 			(&self.conn).prepare("SELECT * FROM Cross_Community WHERE id = (?1)")?;
@@ -89,7 +108,7 @@ impl sqlObject for CrossCommunity {
 //:MappedRows<fn(&Row)-> Result<CrossCommunity>>
 		let mut cc_bd_callback :MappedRows<fn(&Row)-> Result<CrossCommunity>>  = stmt.query_map([i_shouldnt_have_to_do_This], |row| {
 			Ok(CrossCommunity {
-				conn: ,
+				conn: self.conn,
 				id: row.get(0)?,
 				governance_id: row.get(1)?,
 				name: row.get(2)?,
